@@ -4,6 +4,7 @@
 
 // import { HttpConnection, BleConnection } from '@meshtastic/js'
 import { HttpConnection, BleConnection, Protobuf } from '../meshtastic-js/dist'
+import { NodeSerialConnection } from './nodeSerialConnection'
 import {
   Channel,
   MeshPacket,
@@ -36,7 +37,7 @@ import { State } from './lib/state'
 
 let routeCache: State<Record<number, number[]>>
 
-let connection: HttpConnection | BleConnection
+let connection: HttpConnection | BleConnection | NodeSerialConnection
 let connectionIntended = false
 // address.subscribe(connect)
 
@@ -154,6 +155,15 @@ function validateMACAddress(macAddress: string): boolean {
   return pattern.test(macAddress) || macPattern.test(macAddress)
 }
 
+/**
+ * Returns true if the address looks like a native serial port path.
+ * Matches: /dev/ttyACM0, /dev/ttyUSB0, /dev/ttyAMA0, /dev/ttyS0, COM3, etc.
+ */
+function validateSerialPort(address: string): boolean {
+  const serialPattern = /^(\/dev\/tty(ACM|USB|AMA|S)\d+|COM\d+)$/i
+  return serialPattern.test(address)
+}
+
 function disableReconnect() {
   connection.connect = async (args: any) => {
     console.log('[meshtastic] Preventing Automatic Reconnect')
@@ -221,6 +231,9 @@ export async function connect(address?: string) {
     /** If device never showed up, bail */
     if (!bluetoothDevices[address]) return
     stopScanning()
+  } else if (validateSerialPort(address)) {
+    /** Native Serial Device (Node.js backend) */
+    connection = new NodeSerialConnection()
   } else {
     /** HTTP Endpoint */
     connection = new HttpConnection()
@@ -481,10 +494,12 @@ export async function connect(address?: string) {
   })
 
   // Attempt to connect to the specified MeshTastic Node
-  console.log('[meshtastic] Connecting to Node', address, connection instanceof BleConnection ? 'via Bluetooth' : 'via IP')
+  console.log('[meshtastic] Connecting to Node', address, connection instanceof BleConnection ? 'via Bluetooth' : connection instanceof NodeSerialConnection ? 'via Serial' : 'via IP')
   if (connection instanceof BleConnection) {
     // console.log(bluetoothDevices[address])
     await connection.connect({ device: bluetoothDevices[address] })
+  } else if (connection instanceof NodeSerialConnection) {
+    await connection.connect({ path: address, baudRate: 115200 } as any)
   } else {
     process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0'
     await connection.connect({ address, fetchInterval: 2000, tls: enableTLS.value })

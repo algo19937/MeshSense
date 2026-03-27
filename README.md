@@ -1,87 +1,139 @@
-# MeshSense
+# MeshSense (Serial Fork)
 
-**MeshSense** is a simple, [open-source](https://github.com/Affirmatech/MeshSense) application that monitors, maps and graphically displays all the vital stats of your area's Meshtastic network including connected nodes, signal reports, trace routes and more!
+[繁體中文](README.zh-TW.md) | **English**
 
-![](https://affirmatech.com/meshsense.png)
+A fork of [MeshSense](https://github.com/Affirmatech/MeshSense) that adds native USB Serial connection support for Meshtastic devices in the Node.js backend.
 
-MeshSense directly connects to your Meshtastic node via Bluetooth or WiFi and continuously provides all the information you need to assess the health of your network. For more detailed information, take a peek at our [Frequently Asked Questions](https://affirmatech.com/meshsense/faq) or [Bluetooth Tips](https://affirmatech.com/meshsense/bluetooth).
+---
 
-## Headless Usage
+## What's new
 
-To run MeshSense without a GUI, use the `--headless` flag. Additionally the `ACCESS_KEY` environment variable can be used to specify the privileged access key for remote connections to gain full permissions.
+The original MeshSense connects to Meshtastic devices via **BLE** or **HTTP/IP**.  
+While `meshtastic-js` includes a `serialConnection.ts`, it is built on the browser's WebSerial API and cannot run server-side.
 
-```sh
-export ADDRESS=10.0.1.20  # Address of Meshtastic Node
-export PORT=5920          # Port of remote interface
+This fork adds `NodeSerialConnection` — a backend Serial adapter that connects directly to the device over USB using the Node.js `serialport` package, with no browser dependency.
 
-ACCESS_KEY=mySecretKey ./meshsense-x86_64.AppImage --headless
+### Connection comparison
 
-# Alternative execution:
-dbus-run-session xvfb-run ./meshsense-arm64.AppImage --headless \
- --disable-gpu --in-process-gpu --disable-software-rasterizer
+| | BLE | HTTP/IP | Serial (this fork) |
+|---|---|---|---|
+| Connect time | ~30s | ~5s | **~3s** |
+| Stability | Good | Good | **Excellent** |
+| Requirement | Pairing | Network | USB cable |
+| Tested uptime | — | — | **14h+ no drops** |
+
+---
+
+## Changes from upstream
+
+### New file
+
+**`api/src/nodeSerialConnection.ts`**
+
+A Node.js Serial adapter extending `MeshDevice`. Implements Meshtastic's binary framing protocol over a raw serial byte stream:
+
+```
+[0x94] [0xC3] [len_hi] [len_lo] [protobuf payload]
 ```
 
-See also [Headless FAQ](https://affirmatech.com/meshsense/faq#headless)
+- Stream reassembly for fragmented packets (buffer up to 512 bytes)
+- Passive disconnect detection — clears heartbeat when device is unplugged
+- 60-second keepalive heartbeat (firmware requires contact within 15 minutes)
+- Clean resource release on disconnect
 
-## Debian Dependencies
+### Modified files
 
-Ubuntu and Raspberry Pi OS users will need the following dependency installed to run the AppImage:
+**`api/src/meshtastic.ts`**
+- Added `import { NodeSerialConnection }`
+- Extended connection type: `HttpConnection | BleConnection | NodeSerialConnection`
+- Added `validateSerialPort()` to detect Serial path format
+- Added Serial branch in `connect()`: BLE → Serial → HTTP
 
-```sh
-sudo apt install libfuse2
-```
+**`api/meshtastic-js/tsup.config.ts`**
+- Added `serialport` to `external` to prevent native addon bundling issues
 
-To display unicode symbols on the buttons, it may be helpful to install `fonts-noto-color-emoji`
+**`api/meshtastic-js/src/adapters/index.ts`**
+- Removed `nodeSerialConnection` export to keep the `meshtastic-js` build clean
 
-```sh
-sudo apt install fonts-noto-color-emoji
-```
+---
 
-## Development Setup
+## Getting started
 
-To run MeshSense from the source code, first clone the MeshSense repo:
+### Requirements
 
-```sh
-git clone --recurse-submodules https://github.com/Affirmatech/MeshSense.git
+- Node.js v18+
+- A Meshtastic device connected via USB
+
+### Install & run
+
+```bash
+git clone --recurse-submodules https://github.com/your-username/MeshSense.git
 cd MeshSense
-```
 
-Build `webbluetooth` Dependency.  Debian systems will need the `cmake` and `libdbus-1-dev` packages.
+# Build meshtastic-js
+cd api/meshtastic-js && npm install && npm run build && cd ../..
 
-```
-cd api/webbluetooth
-npm i
-npm run build:all
-cd ../..
-```
-
-The `update.mjs` script will pull the latest code and install dependencies for the `ui`, `api`, and `electron` directories.
-
-```sh
-./update.mjs
-```
-
-During development, the electron portion is usually not needed. First start the UI Vite service as follows:
-
-```sh
-cd ui
-PORT=5921 npm run dev
-```
-
-Leave the UI running and then also start the API service. The `DEV_UI_URL` will tell the API to forward any unhandled route requests to the UI service and should use the same port as above.
-
-```sh
-cd api
-export DEV_UI_URL=http://localhost:5921
+# Install and start
+cd api && npm install
 PORT=5920 npm run dev
 ```
 
-The `PORT` variables in the above are optional and will default to the values in the example, but ensure `DEV_UI_URL` is present with the correct port if changed. These values may also be read from `.env` files `api/.env` and `ui/.env` respectively.
+### Connect
 
-The front-end should now be accessible by connecting to the **API** service in a browser. Be careful not to connect to the UI service by accident. http://localhost:5920/
+Enter the Serial port path in the **Address** field and click **Connect**:
 
-Any API changes will automatically reload the service. Any UI changes will be hot-reloaded by Vite.
+```
+/dev/ttyACM0
+```
 
-**Please note:** currently certain event subscribers (particularly State variables) will duplicate their subscription when Vite hot-reloads resulting in duplicate events such as Log entries. Until this is fixed, the easiest solution is to refresh the browser to reset the events.
+### Supported path formats
 
-To build the `ui`, `api`, and `electron` components, the `build.mjs` script will accomplish this. The official electron builds are signed with an Affirmatech certificate on our build servers. The deployables will be placed in `api/dist` and `electron/dist`.
+| Format | Example | Platform |
+|---|---|---|
+| `/dev/ttyACM*` | `/dev/ttyACM0` | Linux — USB CDC ACM |
+| `/dev/ttyUSB*` | `/dev/ttyUSB0` | Linux — USB-Serial adapter |
+| `/dev/ttyAMA*` | `/dev/ttyAMA0` | Raspberry Pi UART |
+| `/dev/ttyS*` | `/dev/ttyS0` | Linux built-in UART |
+| `COM*` | `COM3` | Windows |
+
+### Linux serial port permission
+
+If the port is not accessible, add your user to the `dialout` group:
+
+```bash
+sudo usermod -aG dialout $USER
+# Log out and back in for this to take effect
+```
+
+---
+
+## Known limitations
+
+- **AppImage packaging**: `serialport` contains a native addon whose ABI differs between system Node.js and Electron. Packaging as AppImage requires replacing `serialport` with a TCP proxy approach. This is planned for a future release.
+
+---
+
+## BLE stability fixes (also included)
+
+This fork also incorporates fixes for BLE connection stability (`bleConnection.ts`):
+
+- FIX #1: `Promise.all()` for characteristic discovery (was `.map()`)
+- FIX #2: `pendingRead` guard to prevent concurrent GATT reads
+- FIX #3: Clear polling timer on passive disconnect
+- FIX #4: Remove redundant `readFromRadio()` after write
+- FIX #5: Surface connection failures via device status update
+- FIX #6: Guard against `undefined` returned by `readValue()`
+- FIX #7: `isScanning` guard to prevent concurrent BLE scan requests
+
+Result: BLE connections previously dropped every few minutes now run stably for 3+ hours.
+
+---
+
+## Origin
+
+Forked from **[Affirmatech/MeshSense](https://github.com/Affirmatech/MeshSense)**.  
+All original work and copyright belong to the upstream authors.
+
+## License
+
+GPL-3.0 — same as the upstream project. See [LICENSE](LICENSE).

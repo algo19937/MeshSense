@@ -3,4 +3,4 @@
 	url = https://github.com/Affirmatech/webbluetooth.git
 [submodule "api/meshtastic-js"]
 	path = api/meshtastic-js
-	url = https://github.com/Affirmatech/meshtastic-js.git
+	url = git@github.com:algo19937/meshtastic-js.git

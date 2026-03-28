@@ -69,13 +69,42 @@ A Node.js Serial adapter extending `MeshDevice`. Implements Meshtastic's binary 
 ```bash
 git clone --recurse-submodules https://github.com/your-username/MeshSense.git
 cd MeshSense
+```
 
-# Build meshtastic-js
+Build the `webbluetooth` dependency. Debian-based systems require `cmake` and `libdbus-1-dev`:
+
+```bash
+sudo apt install cmake libdbus-1-dev   # Debian/Ubuntu only
+cd api/webbluetooth
+npm i
+npm run build:all
+cd ../..
+```
+
+Pull latest dependencies for `ui`, `api`, and `electron`:
+
+```bash
+./update.mjs
+```
+
+Build `meshtastic-js`:
+
+```bash
 cd api/meshtastic-js && npm install && npm run build && cd ../..
+```
 
-# Install and start
-cd api && npm install
+Start the API backend:
+
+```bash
+cd api
 PORT=5920 npm run dev
+```
+
+For development, start the UI Vite service in a separate terminal (Electron is not required):
+
+```bash
+cd ui
+PORT=5921 npm run dev
 ```
 
 ### Connect

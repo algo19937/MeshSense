@@ -69,13 +69,42 @@
 ```bash
 git clone --recurse-submodules https://github.com/你的帳號/MeshSense.git
 cd MeshSense
+```
 
-# 建置 meshtastic-js
+建置 `webbluetooth` 依賴套件。Debian 系列系統需要先安裝 `cmake` 與 `libdbus-1-dev`：
+
+```bash
+sudo apt install cmake libdbus-1-dev   # Debian/Ubuntu 限定
+cd api/webbluetooth
+npm i
+npm run build:all
+cd ../..
+```
+
+更新 `ui`、`api`、`electron` 的依賴套件：
+
+```bash
+./update.mjs
+```
+
+建置 `meshtastic-js`：
+
+```bash
 cd api/meshtastic-js && npm install && npm run build && cd ../..
+```
 
-# 安裝並啟動
-cd api && npm install
+啟動 API 後端：
+
+```bash
+cd api
 PORT=5920 npm run dev
+```
+
+開發時不需要 Electron，另開終端機啟動 UI Vite 服務：
+
+```bash
+cd ui
+PORT=5921 npm run dev
 ```
 
 ### 連線

@@ -67,7 +67,7 @@ A Node.js Serial adapter extending `MeshDevice`. Implements Meshtastic's binary 
 ### Install & run
 
 ```bash
-git clone --recurse-submodules https://github.com/your-username/MeshSense.git
+git clone --recurse-submodules https://github.com/algo19937/MeshSense
 cd MeshSense
 ```
 
@@ -87,25 +87,22 @@ Pull latest dependencies for `ui`, `api`, and `electron`:
 ./update.mjs
 ```
 
-Build `meshtastic-js`:
-
-```bash
-cd api/meshtastic-js && npm install && npm run build && cd ../..
-```
-
-Start the API backend:
-
-```bash
-cd api
-PORT=5920 npm run dev
-```
-
-For development, start the UI Vite service in a separate terminal (Electron is not required):
+Start the UI Vite service first in one terminal (Electron is not required during development):
 
 ```bash
 cd ui
 PORT=5921 npm run dev
 ```
+
+Then start the API backend in a separate terminal:
+
+```bash
+cd api
+export DEV_UI_URL=http://localhost:5921
+PORT=5920 npm run dev
+```
+
+Open your browser at `http://localhost:5920`.
 
 ### Connect
 

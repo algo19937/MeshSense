@@ -67,7 +67,7 @@
 ### 安裝與啟動
 
 ```bash
-git clone --recurse-submodules https://github.com/你的帳號/MeshSense.git
+git clone --recurse-submodules https://github.com/algo19937/MeshSense
 cd MeshSense
 ```
 
@@ -87,25 +87,22 @@ cd ../..
 ./update.mjs
 ```
 
-建置 `meshtastic-js`：
-
-```bash
-cd api/meshtastic-js && npm install && npm run build && cd ../..
-```
-
-啟動 API 後端：
-
-```bash
-cd api
-PORT=5920 npm run dev
-```
-
-開發時不需要 Electron，另開終端機啟動 UI Vite 服務：
+先在第一個終端機啟動 UI Vite 服務（開發時不需要 Electron）：
 
 ```bash
 cd ui
 PORT=5921 npm run dev
 ```
+
+再開第二個終端機啟動 API 後端：
+
+```bash
+cd api
+export DEV_UI_URL=http://localhost:5921
+PORT=5920 npm run dev
+```
+
+瀏覽器開啟 `http://localhost:5920`。
 
 ### 連線
 

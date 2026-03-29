@@ -263,7 +263,13 @@ export async function connect(address?: string) {
       // await disconnect()
     } else if (e == 2) {
       console.log('Connection Intended', connectionIntended)
-      if (connectionIntended) {
+      /**
+       * Serial connections do not auto-reconnect on unexpected disconnect
+       * (e.g. device powered off or USB unplugged), because the port path
+       * (/dev/ttyACM0) no longer exists and reconnect attempts will always
+       * fail. Return to disconnected state so the user can reconnect manually.
+       */
+      if (connectionIntended && !(connection instanceof NodeSerialConnection)) {
         connectionStatus.set('reconnecting')
         connect(address)
       } else {

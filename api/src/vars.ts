@@ -30,6 +30,10 @@ export let meshMapForwarding = new State<boolean>('meshMapForwarding', false, { 
 export let tracerouteRateLimit = new State<number>('tracerouteRateLimit', 60, { persist: true })
 export let nodeInactiveTimer = new State<number>('nodeInactiveTimer', 60, { persist: true })
 
+export let tcpProxyEnabled = new State<boolean>('tcpProxyEnabled', false, { persist: true })
+export let tcpProxyPort = new State<number>('tcpProxyPort', 4403, { persist: true })
+export let tcpProxyClients = new State<number>('tcpProxyClients', 0)
+
 export type DeviceMetadata = {
   firmwareVersion: string
   deviceStateVersion: number

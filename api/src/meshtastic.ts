@@ -26,10 +26,14 @@ import {
   packetLimit,
   packets,
   pendingTraceroutes,
+  tcpProxyClients,
+  tcpProxyEnabled,
+  tcpProxyPort,
   tracerouteRateLimit,
   version
 } from './vars'
 import { beginScanning, bluetoothDevices, stopScanning } from './lib/bluetooth'
+import { TcpProxy } from './lib/tcpProxy'
 import exitHook from 'exit-hook'
 import * as geolib from 'geolib'
 import axios from 'axios'
@@ -40,6 +44,36 @@ let routeCache: State<Record<number, number[]>>
 let connection: HttpConnection | BleConnection | NodeSerialConnection
 let connectionIntended = false
 // address.subscribe(connect)
+
+// ── TCP Proxy lifecycle ───────────────────────────────────────────────────────
+let tcpProxy: TcpProxy | undefined
+
+async function startTcpProxy() {
+  if (tcpProxy) await stopTcpProxy()
+  tcpProxy = new TcpProxy(tcpProxyPort.value)
+  tcpProxy.sendToRadio = async (payload) => {
+    if (connection && connectionStatus.value === 'connected') {
+      await connection.sendRaw(payload)
+    }
+  }
+  tcpProxy.onClientCountChange = (count) => tcpProxyClients.set(count)
+  await tcpProxy.start()
+}
+
+async function stopTcpProxy() {
+  await tcpProxy?.stop()
+  tcpProxy = undefined
+  tcpProxyClients.set(0)
+}
+
+tcpProxyEnabled.subscribe((enabled) => {
+  if (enabled) startTcpProxy().catch((e) => console.error('[tcpProxy] Failed to start:', e))
+  else stopTcpProxy().catch((e) => console.error('[tcpProxy] Failed to stop:', e))
+})
+
+tcpProxyPort.subscribe(() => {
+  if (tcpProxyEnabled.value) startTcpProxy().catch((e) => console.error('[tcpProxy] Failed to restart on port change:', e))
+})
 
 /** Tracks when nodes were last requested a traceroute: `traceRouteLog[nodeNum]` */
 let traceRouteLog: Record<number, number> = {}
@@ -451,6 +485,7 @@ export async function connect(address?: string) {
   connection.events.onFromRadio.subscribe((e) => {
     updateTimeout()
     lastFromRadio.set(copy(e))
+    tcpProxy?.broadcast(e)
   })
 
   /** TRACEROUTE_APP */

@@ -25,7 +25,10 @@
     nodeInactiveTimer,
     myNodeMetadata,
     myNodeNum,
-    meshMapForwarding
+    meshMapForwarding,
+    tcpProxyEnabled,
+    tcpProxyPort,
+    tcpProxyClients
   } from 'api/src/vars'
   import { hasAccess, userKey, blockUserKey, getNodeById, displayFahrenheit } from './lib/util'
   import { State } from 'api/src/lib/state'
@@ -155,6 +158,29 @@
       <div class="font-bold">MeshSense Beta Updates</div>
       <button class="btn !mr-auto" on:click={() => axios.get('/checkUpdate')}>Check for updates</button>
     </label>
+
+    <hr class="opacity-25" />
+
+    <div class="flex flex-wrap gap-3 items-end">
+      <label class="flex gap-2 items-center">
+        <input type="checkbox" bind:checked={$tcpProxyEnabled} />
+        <div class="font-bold">Enable TCP Proxy (Meshtastic serial-over-TCP)</div>
+      </label>
+      <label>
+        <div class="font-bold">Port</div>
+        <input class="input w-24" type="number" bind:value={$tcpProxyPort} disabled={!$tcpProxyEnabled} />
+      </label>
+      {#if $tcpProxyEnabled}
+        <div class="text-sm text-white/60">
+          {$tcpProxyClients} client{$tcpProxyClients !== 1 ? 's' : ''} connected
+        </div>
+      {/if}
+    </div>
+    {#if $tcpProxyEnabled}
+      <div class="text-sm text-white/50">
+        Connect Meshtastic CLI with: <span class="font-mono bg-black/30 px-1 rounded">meshtastic --host {$apiHostname} --port {$tcpProxyPort}</span>
+      </div>
+    {/if}
 
     <hr class="opacity-25" />
 

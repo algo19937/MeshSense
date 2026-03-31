@@ -178,7 +178,7 @@
     </div>
     {#if $tcpProxyEnabled}
       <div class="text-sm text-white/50">
-        Connect Meshtastic CLI with: <span class="font-mono bg-black/30 px-1 rounded">meshtastic --host {$apiHostname} --port {$tcpProxyPort}</span>
+        Connect Meshtastic CLI with: <span class="font-mono bg-black/30 px-1 rounded">meshtastic --host {$tcpProxyPort === 4403 ? $apiHostname : `${$apiHostname}:${$tcpProxyPort}`}</span>
       </div>
     {/if}
 

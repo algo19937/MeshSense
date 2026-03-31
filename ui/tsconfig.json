@@ -14,7 +14,10 @@
      */
     "allowJs": true,
     "checkJs": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "paths": {
+      "api/src/*": ["../api/src/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.js", "src/**/*.svelte", "../api/src/lib/state.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]

@@ -39,6 +39,9 @@ export class NodeSerialConnection extends MeshDevice {
   /** 連續失敗幾次才升級為 WARN（預設 3 次） */
   private readonly HEARTBEAT_WARN_THRESHOLD = 3;
 
+  /** Promise-chain mutex：序列化所有 writeToRadio 呼叫，防止 heartbeat 與 queue 同時寫入 */
+  private _writeLock: Promise<void> = Promise.resolve();
+
   constructor(configId?: number) {
     super(configId);
     this.log = this.log.getSubLogger({ name: "NodeSerialConnection" });
@@ -168,6 +171,7 @@ export class NodeSerialConnection extends MeshDevice {
   public disconnect(): void {
     this._clearHeartbeat();
     this.heartbeatFailCount = 0;
+    this._writeLock = Promise.resolve();
 
     if (this.serialPort?.isOpen) {
       this.serialPort.close((err) => {
@@ -193,31 +197,39 @@ export class NodeSerialConnection extends MeshDevice {
   /**
    * Sends supplied protobuf message to the radio.
    * Meshtastic serial framing: [0x94] [0xC3] [len_hi] [len_lo] [...payload]
+   *
+   * Uses a promise-chain mutex (_writeLock) to serialize all writes,
+   * preventing heartbeat and queue writes from interleaving on the serial port.
    */
-  protected async writeToRadio(data: Uint8Array): Promise<void> {
-    if (!this.serialPort?.isOpen) {
-      this.log.error(
-        Types.Emitter[Types.Emitter.WriteToRadio],
-        "❌ Serial port is not open",
-      );
-      return;
-    }
+  protected writeToRadio(data: Uint8Array): Promise<void> {
+    const next = this._writeLock.then(async () => {
+      if (!this.serialPort?.isOpen) {
+        this.log.error(
+          Types.Emitter[Types.Emitter.WriteToRadio],
+          "❌ Serial port is not open",
+        );
+        return;
+      }
 
-    const lenHi = (data.length >> 8) & 0xff;
-    const lenLo = data.length & 0xff;
-    const frame = Buffer.from([...HEADER, lenHi, lenLo, ...data]);
+      const lenHi = (data.length >> 8) & 0xff;
+      const lenLo = data.length & 0xff;
+      const frame = Buffer.from([...HEADER, lenHi, lenLo, ...data]);
 
-    await new Promise<void>((resolve, reject) => {
-      this.serialPort!.write(frame, (err) => {
-        if (err) reject(err);
-        else resolve();
+      await new Promise<void>((resolve, reject) => {
+        this.serialPort!.write(frame, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      }).catch((e: Error) => {
+        this.log.error(
+          Types.Emitter[Types.Emitter.WriteToRadio],
+          `❌ Write error: ${e.message}`,
+        );
       });
-    }).catch((e: Error) => {
-      this.log.error(
-        Types.Emitter[Types.Emitter.WriteToRadio],
-        `❌ Write error: ${e.message}`,
-      );
     });
+
+    this._writeLock = next.catch(() => {});
+    return next;
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

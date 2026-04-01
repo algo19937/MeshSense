@@ -1,5 +1,6 @@
 import { SerialPort } from "serialport";
-import { MeshDevice, Types } from "../meshtastic-js/dist";
+import { create, toBinary } from "@bufbuild/protobuf";
+import { MeshDevice, Protobuf, Types } from "../meshtastic-js/dist";
 
 /** Meshtastic serial framing header bytes */
 const HEADER = [0x94, 0xc3];
@@ -31,6 +32,12 @@ export class NodeSerialConnection extends MeshDevice {
 
   /* Reference for the heartbeat ping interval so it can be canceled on disconnect. */
   private heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+
+  /** 連續 heartbeat 失敗次數，達到閾值才升級為 WARN */
+  private heartbeatFailCount: number = 0;
+
+  /** 連續失敗幾次才升級為 WARN（預設 3 次） */
+  private readonly HEARTBEAT_WARN_THRESHOLD = 3;
 
   constructor(configId?: number) {
     super(configId);
@@ -123,20 +130,44 @@ export class NodeSerialConnection extends MeshDevice {
     });
 
     // Heartbeat every 60 seconds — firmware requires at least one per 15 min.
+    // Use writeToRadio() directly instead of heartbeat() to bypass the queue's
+    // ACK-wait mechanism — firmware never ACKs heartbeat packets, so heartbeat()
+    // always times out after 60 s and the fail counter can never reset.
     this.heartbeatInterval = setInterval(() => {
-      this.heartbeat().catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
-        this.log.warn(
-          Types.Emitter[Types.Emitter.Connect],
-          `⚠️ Heartbeat timed out or failed: ${msg}`,
-        );
-      });
+      const payload = toBinary(
+        Protobuf.Mesh.ToRadioSchema,
+        create(Protobuf.Mesh.ToRadioSchema, {
+          payloadVariant: { case: "heartbeat", value: {} },
+        }),
+      );
+      this.writeToRadio(payload)
+        .then(() => {
+          this.heartbeatFailCount = 0;
+        })
+        .catch((e: unknown) => {
+          this.heartbeatFailCount++;
+          const msg = e instanceof Error ? e.message : String(e);
+
+          if (this.heartbeatFailCount >= this.HEARTBEAT_WARN_THRESHOLD) {
+            this.log.warn(
+              Types.Emitter[Types.Emitter.Connect],
+              `⚠️ Heartbeat timed out or failed: ${msg}`,
+            );
+            this.heartbeatFailCount = 0;
+          } else {
+            this.log.debug(
+              Types.Emitter[Types.Emitter.Connect],
+              `❤️ Heartbeat failed (${this.heartbeatFailCount}/${this.HEARTBEAT_WARN_THRESHOLD}): ${msg}`,
+            );
+          }
+        });
     }, 60 * 1000);
   }
 
   /** Disconnects from the serial port and releases all resources. */
   public disconnect(): void {
     this._clearHeartbeat();
+    this.heartbeatFailCount = 0;
 
     if (this.serialPort?.isOpen) {
       this.serialPort.close((err) => {

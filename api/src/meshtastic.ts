@@ -340,7 +340,12 @@ export async function connect(address?: string) {
       let originalNodeRecord = nodes.value.find((n) => n.num == updates.num)
 
       let updatedNode = nodes.upsert(updates)
-      packets.push(copy(e))
+      let packet = copy(e)
+      const now = Date.now() / 1000
+      if (!packet.rxTime || Math.abs(packet.rxTime - now) > 86400) {
+        packet.rxTime = Math.trunc(now)
+      }
+      packets.push(packet)
 
       // Check and send trace route if needed
       if (updates.hopsAway == 0) updates.trace = null
